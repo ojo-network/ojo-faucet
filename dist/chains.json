@@ -1,0 +1,11 @@
+{
+    "ditto": {
+        "rpc_url": "https://rpc.ditto-val-stage-0.ojo.network",
+        "prefix": "ojo",
+        "denom": "uojo",
+        "amount_to_send": 10000000,
+        "gas_price": "0.025",
+        "gas_amount": 200000,
+        "cooldown_seconds": 21600
+    }
+}
