@@ -18,51 +18,47 @@ const stargate_1 = require("@cosmjs/stargate");
 const helpers_1 = require("./helpers");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const fs_1 = __importDefault(require("fs"));
 const dotenv_1 = require("dotenv");
 (0, dotenv_1.config)();
-const { API_PORT, FAUCET_MNEMONIC } = process.env;
+const { API_PORT, FAUCET_MNEMONIC, RPC_URL, PREFIX, DENOM, AMOUNT_TO_SEND, GAS_PRICE, GAS_AMOUNT, COOLDOWN_SECONDS } = process.env;
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 let cooldown_map = new Map();
-function get_chain(chain_id) {
-    if (chain_id === undefined) {
-        return {
-            error: 'Chain not found'
-        };
-    }
-    let chains = JSON.parse(fs_1.default.readFileSync('chains.json', 'utf8'));
-    let chain_keys = Object.keys(chains);
-    let chain = chains[chain_id];
-    if (chain === undefined) {
-        return {
-            error: 'Chain not found',
-            chains: chain_keys
-        };
-    }
+function get_chain() {
+    var rpc_url = RPC_URL || '';
+    var prefix = PREFIX || '';
+    var denom = DENOM || '';
+    var amount_to_send = AMOUNT_TO_SEND || 0;
+    var gas_price = GAS_PRICE || 0;
+    var gas_amount = GAS_AMOUNT || 0;
+    var cooldown_seconds = COOLDOWN_SECONDS || 0;
+    let chain = {
+        rpc_url: rpc_url,
+        prefix: prefix,
+        denom: denom,
+        amount_to_send: Number(amount_to_send),
+        gas_price: Number(gas_price),
+        gas_amount: Number(gas_amount),
+        cooldown_seconds: Number(cooldown_seconds)
+    };
     return chain;
 }
 // === endpoints ===
 app.get('/', (req, res) => {
     const base_url = req.protocol + '://' + req.get('host') + req.originalUrl;
+    const chains = get_chain();
     res.json({
         endpoints: [
-            `Get Faucet Info: ${base_url}<chain_id>`,
+            `Get Faucet Info: ${base_url}faucet`,
             `Requests Funds (~6 second wait): ${base_url}<chain_id>/<address>`
         ],
-        chains: Object.keys(JSON.parse(fs_1.default.readFileSync('chains.json', 'utf8')))
+        chains: chains,
     });
 });
-app.get('/:chain_id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { chain_id } = req.params;
-    let chain = get_chain(chain_id);
-    if (!chain || chain.error) {
-        res.status(400).json(chain);
-        return;
-    }
-    chain = chain;
+app.get('/faucet', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    let chain = get_chain();
     try {
         const payment_account = yield (0, helpers_1.getAccountFromMnemonic)(FAUCET_MNEMONIC, chain.prefix);
         const client = yield cosmwasm_1.CosmWasmClient.connect(chain.rpc_url);
@@ -78,28 +74,16 @@ app.get('/:chain_id', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         });
     }
 }));
-app.get('/:chain_id/:address', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { chain_id, address } = req.params;
-    // ensure address is only alphanumeric
-    // if (!address.match(/^[a-zA-Z0-9]+$/)) {
-    //     res.status(400).json({
-    //         error: 'Address is not valid'
-    //     })
-    //     return;
-    // }
-    let chain = get_chain(chain_id);
-    if (!chain || chain.error) {
-        res.status(400).json(chain);
-        return;
-    }
-    chain = chain;
+app.get('/faucet/:address', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { address } = req.params;
+    let chain = get_chain();
     // ensure address is valid and starts with prefix
     if (!address.startsWith(chain.prefix)) {
         res.status(400).json({
             error: 'Address is not valid'
         });
     }
-    const map_key = `${chain_id}-${address}`;
+    const map_key = `ojo-${address}`;
     if (cooldown_map.has(map_key)) {
         let cooldown = cooldown_map.get(map_key);
         let seconds_until_then = (cooldown - Date.now()) / 1000;
@@ -118,7 +102,6 @@ app.get('/:chain_id/:address', (req, res) => __awaiter(void 0, void 0, void 0, f
         return;
     }
     const config = {
-        chainId: chain_id,
         rpcEndpoint: chain.rpc_url,
         prefix: chain.prefix,
     };

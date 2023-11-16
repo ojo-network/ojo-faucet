@@ -11,8 +11,9 @@ import cors from 'cors';
 import fs from 'fs';
 
 import { config } from 'dotenv';
+import { get } from "http";
 config();
-const { API_PORT, FAUCET_MNEMONIC } = process.env;
+const { API_PORT, FAUCET_MNEMONIC, RPC_URL, PREFIX, DENOM, AMOUNT_TO_SEND, GAS_PRICE, GAS_AMOUNT, COOLDOWN_SECONDS } = process.env;
 
 
 const app = express();
@@ -34,22 +35,23 @@ interface ChainInfo {
     error?: string;
 }
 
-function get_chain(chain_id: string) {
-    if (chain_id === undefined) {
-        return {
-            error: 'Chain not found'
-        }
-    }
+function get_chain() {
+    var rpc_url = RPC_URL || '';
+    var prefix = PREFIX || '';
+    var denom = DENOM || '';
+    var amount_to_send = AMOUNT_TO_SEND || 0;
+    var gas_price = GAS_PRICE || 0;
+    var gas_amount = GAS_AMOUNT || 0;
+    var cooldown_seconds = COOLDOWN_SECONDS || 0;
 
-    let chains = JSON.parse(fs.readFileSync('chains.json', 'utf8'));
-    let chain_keys = Object.keys(chains);
-    let chain = chains[chain_id];
-
-    if (chain === undefined) {
-        return {
-            error: 'Chain not found',
-            chains: chain_keys
-        }
+    let chain: ChainInfo = {
+        rpc_url: rpc_url,
+        prefix: prefix,
+        denom: denom,
+        amount_to_send: Number(amount_to_send),
+        gas_price: Number(gas_price),
+        gas_amount: Number(gas_amount),
+        cooldown_seconds: Number(cooldown_seconds)
     }
 
     return chain;
@@ -60,26 +62,19 @@ function get_chain(chain_id: string) {
 
 app.get('/', (req, res) => {
     const base_url = req.protocol + '://' + req.get('host') + req.originalUrl;
+    const chains = get_chain();
     res.json({
         endpoints: [
-            `Get Faucet Info: ${base_url}<chain_id>`,
+            `Get Faucet Info: ${base_url}faucet`,
             `Requests Funds (~6 second wait): ${base_url}<chain_id>/<address>`
         ],
-        chains: Object.keys(JSON.parse(fs.readFileSync('chains.json', 'utf8')))
+        chains: chains,
     })
 })
 
 
-app.get('/:chain_id', async (req, res) => {
-    const { chain_id } = req.params;
-
-    let chain = get_chain(chain_id);
-    if (!chain || chain.error) {
-        res.status(400).json(chain);
-        return;
-    }
-
-    chain = chain as ChainInfo;
+app.get('/faucet', async (req, res) => {
+    let chain = get_chain();
 
     try {
         const payment_account = await getAccountFromMnemonic(FAUCET_MNEMONIC, chain.prefix);
@@ -101,26 +96,11 @@ app.get('/:chain_id', async (req, res) => {
 })
 
 
-app.get('/:chain_id/:address', async (req, res) => {
-    const { chain_id, address } = req.params;
-
-    // ensure address is only alphanumeric
-    // if (!address.match(/^[a-zA-Z0-9]+$/)) {
-    //     res.status(400).json({
-    //         error: 'Address is not valid'
-    //     })
-    //     return;
-    // }
+app.get('/faucet/:address', async (req, res) => {
+    const { address } = req.params;
 
 
-
-    let chain = get_chain(chain_id);
-    if (!chain || chain.error) {
-        res.status(400).json(chain);
-        return;
-    }
-
-    chain = chain as ChainInfo;
+    let chain = get_chain();
 
     // ensure address is valid and starts with prefix
     if (!address.startsWith(chain.prefix)) {
@@ -129,7 +109,7 @@ app.get('/:chain_id/:address', async (req, res) => {
         })
     }
 
-    const map_key = `${chain_id}-${address}`;
+    const map_key = `ojo-${address}`;
     if (cooldown_map.has(map_key)) {
         let cooldown = cooldown_map.get(map_key);
         let seconds_until_then = (cooldown - Date.now()) / 1000;
@@ -150,7 +130,6 @@ app.get('/:chain_id/:address', async (req, res) => {
     }
 
     const config = {
-        chainId: chain_id,
         rpcEndpoint: chain.rpc_url,
         prefix: chain.prefix,
     }
