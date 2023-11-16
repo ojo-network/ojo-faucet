@@ -12,7 +12,7 @@ import fs from 'fs';
 
 import { config } from 'dotenv';
 config();
-const { API_PORT } = process.env;
+const { API_PORT, FAUCET_MNEMONIC } = process.env;
 
 
 const app = express();
@@ -26,7 +26,6 @@ let cooldown_map = new Map();
 interface ChainInfo {
     rpc_url: string;
     prefix: string;
-    faucet_mnemonic: string;
     denom: string;
     amount_to_send: number;
     gas_price: number;
@@ -71,7 +70,7 @@ app.get('/', (req, res) => {
 })
 
 
-app.get('/:chain_id', async (req, res) => {    
+app.get('/:chain_id', async (req, res) => {
     const { chain_id } = req.params;
 
     let chain = get_chain(chain_id);
@@ -83,8 +82,8 @@ app.get('/:chain_id', async (req, res) => {
     chain = chain as ChainInfo;
 
     try {
-        const payment_account = await getAccountFromMnemonic(chain.faucet_mnemonic, chain.prefix);
-    
+        const payment_account = await getAccountFromMnemonic(FAUCET_MNEMONIC, chain.prefix);
+
         const client = await CosmWasmClient.connect(chain.rpc_url);
         const balance = await client.getBalance(payment_account.account.address, chain.denom);
 
@@ -129,20 +128,20 @@ app.get('/:chain_id/:address', async (req, res) => {
             error: 'Address is not valid'
         })
     }
-    
+
     const map_key = `${chain_id}-${address}`;
     if (cooldown_map.has(map_key)) {
         let cooldown = cooldown_map.get(map_key);
         let seconds_until_then = (cooldown - Date.now()) / 1000;
         if (cooldown > Date.now()) {
-            res.status(400).json({                
+            res.status(400).json({
                 error: `Address is in cooldown for ${seconds_until_then} seconds`
             })
             return;
         }
     }
 
-    const payment_account = await getAccountFromMnemonic(chain.faucet_mnemonic, chain.prefix); 
+    const payment_account = await getAccountFromMnemonic(FAUCET_MNEMONIC, chain.prefix);
     if (address === payment_account.account.address) {
         res.status(400).json({
             error: 'Address is the same as the faucet address'
@@ -168,7 +167,7 @@ app.get('/:chain_id/:address', async (req, res) => {
 
         res.json({
             message: `Payment of amount: ${amt.amount} ${amt.denom}`,
-            faucet_account: payment_account.account.address,        
+            faucet_account: payment_account.account.address,
             result: result
         })
 

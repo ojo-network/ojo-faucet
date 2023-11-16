@@ -1,5 +1,5 @@
 {
-  "name": "cosmos-faucet",
+  "name": "ojo-faucet",
   "version": "1.0.0",
   "description": "A REST API for GETting tokens",
   "main": "src/index.ts",
