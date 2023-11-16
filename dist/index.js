@@ -52,7 +52,7 @@ app.get('/', (req, res) => {
     res.json({
         endpoints: [
             `Get Faucet Info: ${base_url}faucet`,
-            `Requests Funds (~6 second wait): ${base_url}<chain_id>/<address>`
+            `Requests Funds (~6 second wait): ${base_url}faucet/<address>`
         ],
         chains: chains,
     });
